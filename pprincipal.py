@@ -1,8 +1,7 @@
 import pygame
 import sys
 import random
-from configuraciones import BLANCO
-from configuraciones import TAM_CASILLA, GRIS, AZUL, ROJO, NEGRO
+from configuraciones import GRIS, AZUL, ROJO, NEGRO, BLANCO
 
 # Inicialización
 pygame.init()
@@ -116,6 +115,9 @@ def menu_principal():
         {"texto": "Ver Puntajes", "rect": pygame.Rect(ANCHO_VENTANA//2 - 150, 350, 300, 70)},
         {"texto": "Salir", "rect": pygame.Rect(ANCHO_VENTANA//2 - 150, 450, 300, 70)},
     ]
+    # Botón de mute arriba del botón salir en el menú principal
+    boton_mute = pygame.Rect(ANCHO_VENTANA//2 - 150, 200, 300, 40)
+    muteado = False
     while True:
         ventana.blit(fondo_mar_scaled, (offset_x, offset_y))
         titulo = fuente.render("BATALLA NAVAL", True, (255,255,255))
@@ -126,12 +128,22 @@ def menu_principal():
         for boton in botones:
             activo = boton["rect"].collidepoint(mouse_pos)
             dibujar_boton_menu(ventana, boton["texto"], boton["rect"], activo)
+        # Dibuja el botón de mute arriba del botón salir
+        pygame.draw.rect(ventana, (60,60,60), boton_mute, border_radius=10)
+        texto_mute = "Música: OFF" if muteado else "Música: ON"
+        fuente_mute = pygame.font.SysFont(FUENTE_GRIEGA, 24, bold=True)
+        texto_mute_render = fuente_mute.render(texto_mute, True, (255,255,255))
+        texto_mute_rect = texto_mute_render.get_rect(center=boton_mute.center)
+        ventana.blit(texto_mute_render, texto_mute_rect)
         pygame.display.flip()
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
             if evento.type == pygame.MOUSEBUTTONDOWN:
+                if boton_mute.collidepoint(evento.pos):
+                    muteado = not muteado
+                    pygame.mixer.music.set_volume(0 if muteado else 0.5)
                 for boton in botones:
                     if boton["rect"].collidepoint(evento.pos):
                         esperar_soltado()
@@ -173,7 +185,8 @@ def colocar_barcos_juego(tablero, barcos):
     for tamaño, cantidad in barcos:
         for _ in range(cantidad):
             colocado = False
-            while not colocado:
+            intentos = 0
+            while not colocado and intentos < 1000:
                 horizontal = random.choice([True, False])
                 if horizontal:
                     fila = random.randint(0, FILAS - 1)
@@ -188,6 +201,10 @@ def colocar_barcos_juego(tablero, barcos):
                         else:
                             tablero[fila + i][columna] = 1
                     colocado = True
+                intentos += 1
+            if not colocado:
+                return False  # No se pudo colocar el barco
+    return True  # Todos los barcos colocados correctamente
 
 def puede_colocar(tablero, fila, columna, tamaño, horizontal=True):
     for i in range(tamaño):
@@ -322,13 +339,22 @@ while True:
                 (3, 2),  # Crucero/Submarino x2
                 (2, 2),  # Destructor x2
             ]
+        # Tamaño fijo pequeño para las casillas en todos los niveles
+        TAM_CASILLA = 25
         # Inicializar variables globales del juego
         tablero_ancho = COLUMNAS * TAM_CASILLA
         tablero_alto = FILAS * TAM_CASILLA
         tablero_offset_x = (ANCHO_VENTANA - tablero_ancho) // 2
         tablero_offset_y = (ALTO_VENTANA - tablero_alto) // 2
         tablero = crear_tablero()
-        colocar_barcos_juego(tablero, barcos_configurados)
+        exito = colocar_barcos_juego(tablero, barcos_configurados)
+        if not exito:
+            fuente = pygame.font.SysFont(FUENTE_GRIEGA, 40, bold=True)
+            texto = fuente.render("No hay espacio suficiente para los barcos.", True, (255, 0, 0))
+            ventana.blit(texto, (ANCHO_VENTANA//2 - texto.get_width()//2, ALTO_VENTANA//2))
+            pygame.display.flip()
+            pygame.time.wait(2000)
+            continue  # Vuelve al menú principal
         nick = pedir_nombre_pygame()
         disparos = 0
         puntaje = 0
@@ -344,6 +370,9 @@ while True:
         boton_salir_x = boton_reiniciar_x
         boton_salir_y = boton_reiniciar_y + boton_reiniciar_alto + 20  # 20px de separación
         boton_salir = pygame.Rect(boton_salir_x, boton_salir_y, boton_salir_ancho, boton_salir_alto)
+        # Botón de mute debajo del botón Salir durante el juego
+        boton_mute = pygame.Rect(boton_salir.left, boton_salir.bottom + 20, boton_salir.width, 40)
+        muteado = pygame.mixer.music.get_volume() == 0
         corriendo = True
         while corriendo:
             for evento in pygame.event.get():
@@ -352,6 +381,9 @@ while True:
                     sys.exit()
                 elif evento.type == pygame.MOUSEBUTTONDOWN:
                     x, y = pygame.mouse.get_pos()
+                    if boton_mute.collidepoint((x, y)):
+                        muteado = not muteado
+                        pygame.mixer.music.set_volume(0 if muteado else 0.5)
                     if boton_reiniciar.collidepoint(x, y):
                         tablero = crear_tablero()
                         colocar_barcos_juego(tablero, barcos_configurados)
@@ -393,6 +425,14 @@ while True:
             texto_salir = fuente.render("Salir", True, BLANCO)
             texto_salir_rect = texto_salir.get_rect(center=boton_salir.center)
             ventana.blit(texto_salir, texto_salir_rect)
+            # Dibuja el botón de mute debajo del botón salir, igual que los otros botones
+            pygame.draw.rect(ventana, (0, 0, 0), boton_mute, border_radius=15)
+            pygame.draw.rect(ventana, BLANCO, boton_mute, 2, border_radius=15)
+            texto_mute = "Música: OFF" if muteado else "Música: ON"
+            fuente_mute = pygame.font.SysFont(FUENTE_GRIEGA, 24, bold=True)
+            texto_mute_render = fuente_mute.render(texto_mute, True, BLANCO)
+            texto_mute_rect = texto_mute_render.get_rect(center=boton_mute.center)
+            ventana.blit(texto_mute_render, texto_mute_rect)
             info_x = tablero_offset_x + tablero_ancho + 30
             # Mostrar el mejor puntaje y nombre arriba del panel de puntaje
             try:
@@ -415,9 +455,13 @@ while True:
             ventana.blit(texto_disparos, (info_x, tablero_offset_y + 40))
             ventana.blit(texto_puntaje, (info_x, tablero_offset_y + 100))
             if todos_los_barcos_hundidos(tablero):
+                # Guardar puntaje y nombre al terminar la partida
+                with open("puntajes.txt", "a", encoding="utf-8") as f:
+                    f.write(f"{nick},{puntaje}\n")
                 fuente = pygame.font.SysFont(None, 60)
                 texto = fuente.render("¡Ganaste!", True, BLANCO)
-                texto_rect = texto.get_rect(center=(ANCHO_VENTANA // 2, ALTO_VENTANA // 2))
+                # Mostrar el cartel arriba del tablero
+                texto_rect = texto.get_rect(center=(ANCHO_VENTANA // 2, tablero_offset_y // 2))
                 for _ in range(6):
                     ventana.blit(mar_scaled, (offset_x_mar, offset_y_mar))
                     dibujar_tablero(ventana, mostrar_barcos=True)
@@ -430,7 +474,12 @@ while True:
                         ventana.blit(texto, texto_rect)
                     pygame.display.flip()
                     pygame.time.wait(300)
-                boton_nuevo = pygame.Rect(ANCHO_VENTANA // 2 - 180, ALTO_VENTANA // 2 + 80, 360, 70)
+                # Botón 'Comenzar de nuevo' debajo del tablero
+                boton_nuevo = pygame.Rect(
+                    ANCHO_VENTANA // 2 - 180,
+                    tablero_offset_y + tablero_alto + 40,
+                    360, 70
+                )
                 fuente_btn = pygame.font.SysFont(None, 48)
                 activo = True
                 while activo:
@@ -438,6 +487,8 @@ while True:
                     dibujar_tablero(ventana, mostrar_barcos=True)
                     pygame.draw.rect(ventana, (0, 0, 0), rect_fondo, border_radius=20)
                     ventana.blit(texto, texto_rect)
+                    # Fondo negro al botón 'Comenzar de nuevo'
+                    pygame.draw.rect(ventana, (0, 0, 0), boton_nuevo, border_radius=20)
                     pygame.draw.rect(ventana, BLANCO, boton_nuevo, 2, border_radius=15)
                     texto_btn = fuente_btn.render("Comenzar de nuevo", True, BLANCO)
                     texto_btn_rect = texto_btn.get_rect(center=boton_nuevo.center)
